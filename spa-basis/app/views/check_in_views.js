@@ -32,6 +32,10 @@ module.exports = View.extend({
         }
     },
 
+    events: {
+        'click header button' : 'fetchPlaces'
+    }, // this.$el.on('click', 'header button', this.fetchPlaces.bind(this);
+
     initialize: function() {
         // super
         View.prototype.initialize.apply(this, arguments);
@@ -45,6 +49,7 @@ module.exports = View.extend({
 
     fetchPlaces: function fetchPlaces () {
         var that = this;
+        this.model.set(that.model.defaults);
         locSvc.getCurrentLocation(function(lat, lng) {
             //console.log(lat, lng);
             that.model.set({
