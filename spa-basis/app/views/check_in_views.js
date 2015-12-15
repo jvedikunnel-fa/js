@@ -6,8 +6,9 @@
 var View = require('./view');
 var CheckInUX = require('models/check_in_ux');
 var locSvc = require('lib/location');
-var _ = require('underscore');
 var poiSvc = require('lib/places');
+var _ = require('underscore');
+var userName = require('lib/notifications');
 
 module.exports = View.extend({
     // Le template principal
@@ -41,7 +42,8 @@ module.exports = View.extend({
 
     events: {
         'click header button' : 'fetchPlaces', // this.$el.on('click', 'header button', this.fetchPlaces.bind(this);
-        'click #places li' : 'selectPlace'
+        'click #places li' : 'selectPlace',
+        'submit': 'checkIn'
     },
 
     initialize: function() {
@@ -53,6 +55,21 @@ module.exports = View.extend({
 
     afterRender: function afterCheckInRender() {
         this.fetchPlaces();
+    },
+
+    checkIn: function checkIn(event) {
+        event.preventDefault();
+
+        var place = this.model.getPlace();
+
+        console.log({
+            placeId: this.model.get('placeId'),
+            comment: this.model.get('comment'),
+            userName: userName.userName,
+            name: place.name,
+            icon: place.icon,
+            vicinity: place.vicinity
+        });
     },
 
     selectPlace: function (event) {

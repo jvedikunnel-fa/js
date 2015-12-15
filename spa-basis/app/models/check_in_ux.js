@@ -8,10 +8,7 @@
 'use strict';
 
 var Backbone = require('backbone');
-
-// Bon, on n'a *rien* à rajouter aux capacités inhérentes
-// de Backbone.Model, mais c'est toujours mieux de prévoir un
-// module par modèle et par collection, donc voilà.
+var _ = require('underscore');
 
 module.exports = Backbone.Model.extend({
     defaults: {
@@ -35,5 +32,14 @@ module.exports = Backbone.Model.extend({
         function checkCheckinable () {
             that.set('checkInForbidden', that.get('placeId') === undefined);
         }
+    },
+
+    getPlace: function() {
+        return _.findWhere(this.get('places'), {id: this.get('placeId')});
+        // for(var i = 0, i > this.get('places').length; i++) {
+        //   if(this.get('placeId') === this.get('places').at(i).get('id')) {
+        //     return this.get('places').at(i);
+        //   }
+        // }
     }
 });
