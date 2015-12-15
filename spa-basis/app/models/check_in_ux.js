@@ -19,6 +19,21 @@ module.exports = Backbone.Model.extend({
         lng: 0,
         places: [],
         comment: '',
-        placeId: undefined
+        placeId: undefined,
+        checkInForbidden: true
+    },
+    initialize: function initCheckInUX() {
+        var that = this;
+        //super
+        Backbone.Model.prototype.initialize.apply(this, arguments);
+
+        // on change
+        this.on('change', checkCheckinable);
+
+        checkCheckinable();
+
+        function checkCheckinable () {
+            that.set('checkInForbidden', that.get('placeId') === undefined);
+        }
     }
 });

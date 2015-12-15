@@ -30,6 +30,12 @@ module.exports = View.extend({
                 return this.renderTemplate(this.model.pick('places', 'placeId'), this.placesTemplate);
             },
             updateMethod: 'html'
+        },
+        'button[type=submit]': {
+            attributes: [{
+                name: 'disabled',
+                observe: 'checkInForbidden'
+            }]
         }
     },
 
