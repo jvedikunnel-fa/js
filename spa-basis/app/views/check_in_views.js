@@ -15,6 +15,7 @@ module.exports = View.extend({
     placesTemplate: require('./templates/places'),
 
     bindings: {
+        '#comment': 'comment',
         '#geoloc': {
             observe: ['lat', 'lng'],
             onGet: function(pos) { // en param le contenu d'observe
@@ -24,17 +25,18 @@ module.exports = View.extend({
             }
         },
         '#places': {
-            observe: ['places'],
+            observe: ['places', 'placeId'],
             onGet: function() {
-                return this.renderTemplate(this.model.pick('places'), this.placesTemplate);
+                return this.renderTemplate(this.model.pick('places', 'placeId'), this.placesTemplate);
             },
             updateMethod: 'html'
         }
     },
 
     events: {
-        'click header button' : 'fetchPlaces'
-    }, // this.$el.on('click', 'header button', this.fetchPlaces.bind(this);
+        'click header button' : 'fetchPlaces', // this.$el.on('click', 'header button', this.fetchPlaces.bind(this);
+        'click #places li' : 'selectPlace'
+    },
 
     initialize: function() {
         // super
@@ -45,6 +47,12 @@ module.exports = View.extend({
 
     afterRender: function afterCheckInRender() {
         this.fetchPlaces();
+    },
+
+    selectPlace: function (event) {
+        //var placeId = event.currentTarget.getAttribute('data-place-id');
+        var placeId = this.$(event.currentTarget).attr('data-place-id');
+        this.model.set('placeId', placeId);
     },
 
     fetchPlaces: function fetchPlaces () {

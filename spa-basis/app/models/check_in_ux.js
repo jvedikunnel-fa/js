@@ -17,6 +17,8 @@ module.exports = Backbone.Model.extend({
     defaults: {
         lat: 0,
         lng: 0,
-        places: []
+        places: [],
+        comment: '',
+        placeId: undefined
     }
 });
