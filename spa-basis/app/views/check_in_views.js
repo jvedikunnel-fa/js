@@ -8,7 +8,8 @@ var CheckInUX = require('models/check_in_ux');
 var locSvc = require('lib/location');
 var poiSvc = require('lib/places');
 var _ = require('underscore');
-var userName = require('lib/notifications');
+var userName = require('lib/notifications').userName;
+var store = require('lib/persistence');
 
 module.exports = View.extend({
     // Le template principal
@@ -62,10 +63,10 @@ module.exports = View.extend({
 
         var place = this.model.getPlace();
 
-        console.log({
-            placeId: this.model.get('placeId'),
+        store.addCheckIn({
+            placeId: place.id,
             comment: this.model.get('comment'),
-            userName: userName.userName,
+            userName: userName,
             name: place.name,
             icon: place.icon,
             vicinity: place.vicinity
