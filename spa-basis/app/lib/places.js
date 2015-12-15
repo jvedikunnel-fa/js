@@ -50,7 +50,7 @@ function initializePlacesAPI() {
   if (placesService || !cnxSvc.isOnline()) return;
   var script = document.createElement('script');
   script.src = 'http://maps.googleapis.com/maps/api/js?key=' + JSGURUV3_API_KEY +
-    '&libraries=places&sensor=true&callback=makePlacesReady';
+    '&libraries=places&callback=makePlacesReady';
 
   window.makePlacesReady = function() {
     delete window.makePlacesReady;
