@@ -9,6 +9,13 @@ var _ = require('underscore');
 
 var collection = new CheckInsCollection();
 //console.log(collection);
+var Lawnchair = require('lawnchair');
+require('lawnchair-dom'); // va s'enregistrer sur un Lawnchair existant
+
+var localStore = new Lawnchair(
+    {name: 'checkins'},
+    function(){} // obligatoire mais pas utilisé
+);
 
 function addCheckIn(checkIn) {
     checkIn.key = Date.now();
@@ -36,6 +43,13 @@ function initialLoad() {
 
 Backbone.Mediator.subscribe('connectivity:online', initialLoad);
 
+function localLoad() {
+    localStore.all(function(checkins) {
+        collection.reset(checkins, {localLoad: true});
+        initialLoad();
+    });
+}
+
 function accountForSync(model) {
     // suppression de l'élément synchronisé par backbone
     pendings = _.without(pendings, model); // recharge les pendings sans l'élément synchronisé
@@ -49,15 +63,28 @@ function accountForSync(model) {
     collection.fetch({reset: true});
 }
 
-collection.on('reset', function(){
+collection.on('reset', function(_, options){  // je n'utilise pas le 1er param
+    if (options === undefined || !options.localLoad) {
+        localStore.nuke(function(){
+            localStore.batch(collection.toJSON());
+        }); // supprime et récrée la collection
+    }
     Backbone.Mediator.publish('checkins:reset');
 });
 
 collection.on('add', function(model){ // vue dans l'api backbone ce que renvoie le add
+    localStore.save(model.toJSON()); // ajout du checkin
     Backbone.Mediator.publish('checkins:new', model.toJSON());
 });
 
-initialLoad();
+collection.on('sync', function(model) {
+    if (!(model instanceof collection.model)) {
+        return;
+    }
+    localStore.save(model.toJSON());
+});
+
+localLoad();
 
 function getCheckIns() {
     return collection.toJSON();
