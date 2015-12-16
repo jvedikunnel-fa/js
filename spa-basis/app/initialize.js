@@ -13,8 +13,8 @@ var Backbone = require('backbone');
 // Backbone ne tente pas un require('jquery'), il exige le global.  Bizarre…
 Backbone.$ = $;
 // Activer les plugins
-require('backbone-mediator');
-require('backbone-stickit');
+require('backbone-mediator'); // publish subscribe : transmet info entre 2 couches sans dépendance directe entre module
+require('backbone-stickit'); // gestion de l'actualisation des propriétés bindées des modèles
 // Charger les modules Bootstrap 3 utiles à notre appli (module custom)
 require('bootstrap');
 
