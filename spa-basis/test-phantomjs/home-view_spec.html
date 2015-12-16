@@ -10,7 +10,7 @@
 <script src="../node_modules/chai/chai.js"></script>
 <script src="../node_modules/sinon/pkg/sinon.js"></script>
 <script>
-    mocha.ui('bdd').reporter('html').slow(250);
+    mocha.ui('bdd').slow(250).reporter('html');
     chai.should();
 </script>
 <script src="../public/app.js"></script>
