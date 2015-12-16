@@ -7,6 +7,7 @@ var View = require('./view');
 var CheckInUX = require('models/check_in_ux');
 var locSvc = require('lib/location');
 var poiSvc = require('lib/places');
+var cnxSvc = require('lib/connectivity');
 var _ = require('underscore');
 var userName = require('lib/notifications').userName;
 var store = require('lib/persistence');
@@ -83,6 +84,9 @@ module.exports = View.extend({
     },
 
     fetchPlaces: function fetchPlaces () {
+        if (!cnxSvc.isOnline()) {
+            return;
+        }
         var that = this;
         this.model.set(that.model.defaults);
         locSvc.getCurrentLocation(function(lat, lng) {

@@ -4,6 +4,7 @@
 
 var CheckInsCollection = require('models/collection');
 var Backbone = require('backbone');
+var cnxSvc = require('lib/connectivity');
 
 var collection = new CheckInsCollection();
 //console.log(collection);
@@ -14,6 +15,9 @@ function addCheckIn(checkIn) {
 }
 
 function initialLoad() {
+    if (!cnxSvc.isOnline()) {
+        return;
+    }
     collection.fetch({reset: true}); // reset permet d'envoyer un event qu'on pourra écouter pour render la vue
 }
 
