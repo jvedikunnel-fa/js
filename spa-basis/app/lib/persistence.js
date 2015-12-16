@@ -21,8 +21,8 @@ collection.on('reset', function(){
     Backbone.Mediator.publish('checkins:reset');
 });
 
-collection.on('add', function(){
-    Backbone.Mediator.publish('checkins:new');
+collection.on('add', function(model){ // vue dans l'api backbone ce que renvoie le add
+    Backbone.Mediator.publish('checkins:new', model.toJSON());
 });
 
 initialLoad();
