@@ -18,8 +18,12 @@ var localStore = new Lawnchair(
 );
 
 function addCheckIn(checkIn) {
-    checkIn.key = Date.now();
-    collection.create(checkIn); // add + save
+    if (collection.findWhere(_.pick(checkIn, 'key', 'userName'))) {  // si le checkin a déjà été mis dans la collection
+        return;
+    }
+
+    checkIn.key = checkIn.key || Date.now();
+    collection['id' in checkIn ? 'add' : 'create'](checkIn); // create = add + save
 }
 
 var pendings;
