@@ -39,6 +39,12 @@ module.exports = View.extend({
                 name: 'disabled',
                 observe: 'checkInForbidden'
             }]
+        },
+        'header button': {
+            attributes: [{
+                name: 'disabled',
+                observe: 'fetchPlacesForbidden'
+            }]
         }
     },
 

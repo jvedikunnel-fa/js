@@ -9,6 +9,7 @@
 
 var Backbone = require('backbone');
 var _ = require('underscore');
+var cnxSvc = require('lib/connectivity');
 
 module.exports = Backbone.Model.extend({
     defaults: {
@@ -17,7 +18,8 @@ module.exports = Backbone.Model.extend({
         places: [],
         comment: '',
         placeId: undefined,
-        checkInForbidden: true
+        checkInForbidden: true,
+        fetchPlacesForbidden: false
     },
     initialize: function initCheckInUX() {
         var that = this;
@@ -28,9 +30,17 @@ module.exports = Backbone.Model.extend({
         this.on('change', checkCheckinable);
 
         checkCheckinable();
+        checkFetchable();
+
+        Backbone.Mediator.subscribe('connectivity:online', checkFetchable);
+        Backbone.Mediator.subscribe('connectivity:offline', checkFetchable);
 
         function checkCheckinable () {
             that.set('checkInForbidden', that.get('placeId') === undefined);
+        }
+
+        function checkFetchable () {
+            that.set('fetchPlacesForbidden', !cnxSvc.isOnline());
         }
     },
 
