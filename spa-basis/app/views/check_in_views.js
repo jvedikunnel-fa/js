@@ -71,6 +71,9 @@ module.exports = View.extend({
             icon: place.icon,
             vicinity: place.vicinity
         });
+
+        this.model.set({placeId: undefined, comment: ''});
+        //this.model.set(_.pick(this.model.defaults, 'placeId', 'comment')); // avec la lib underscore
     },
 
     selectPlace: function (event) {

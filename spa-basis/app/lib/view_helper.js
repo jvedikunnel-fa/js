@@ -7,7 +7,9 @@ module.exports = {
   // de création formatté en HH:mm.
   checkInMoment: function checkInMoment(checkIn) {
     var key = checkIn.hasOwnProperty('key') ? checkIn.key : checkIn;
-    return moment(+key).format('HH:mm');
+    if (!isNaN(+key))
+      return moment(+key).format('DD/MM/YYYY HH:mm');
+    return '-';
   },
 
   // Petit helper formattant un nombre de secondes avec un niveau

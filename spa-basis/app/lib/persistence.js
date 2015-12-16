@@ -16,11 +16,16 @@ function addCheckIn(checkIn) {
 function initialLoad() {
     collection.fetch({reset: true}); // reset permet d'envoyer un event qu'on pourra écouter pour render la vue
 }
-initialLoad();
 
 collection.on('reset', function(){
     Backbone.Mediator.publish('checkins:reset');
 });
+
+collection.on('add', function(){
+    Backbone.Mediator.publish('checkins:new');
+});
+
+initialLoad();
 
 function getCheckIns() {
     return collection.toJSON();

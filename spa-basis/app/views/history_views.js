@@ -11,7 +11,8 @@ module.exports = View.extend({
     checkinsTemplate: require('./templates/check_ins'),
 
     subscriptions: {
-        'checkins:reset': 'render' // render n'existe pas encore, appelera this['render']() après
+        'checkins:reset': 'render', // render n'existe pas encore, appelera this['render']() après
+        'checkins:new': 'render'
     },
 
     getRenderData: function homeRenderData () {
