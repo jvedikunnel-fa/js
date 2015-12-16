@@ -1,10 +1,7 @@
 /**
  * Created by jvedikunnel on 16/12/2015.
  */
-/**
- * Created by jvedikunnel on 16/12/2015.
- */
-/* globals describe, before, beforeEach, afterEach, it */
+/* globals describe, before, beforeEach, afterEach, sinon, it */
 
 describe('The home view', function() {
     var prompt, io, xhr, clock;

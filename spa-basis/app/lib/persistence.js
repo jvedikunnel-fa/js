@@ -94,5 +94,11 @@ function getCheckIns() {
     return collection.toJSON();
 }
 
+// methode dédiée au test
+function getLocalStore(cb) {
+    localStore.all(cb);
+}
+
 exports.addCheckIn = addCheckIn;
 exports.getCheckIns = getCheckIns;
+exports.getLocalStoreForTests = getLocalStore;
