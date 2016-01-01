@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="fr">
+
+  <head>
+    <meta charset="utf-8">
+    <title>JS Total • 3ème partie, 16/12/2015</title>
+
+    <meta name="author" content="Christophe Porteneuve">
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <link rel="stylesheet" href="css/reveal.min.css">
+    <link rel="stylesheet" href="css/theme/js-attitude.css" id="theme">
+
+    <!-- For syntax highlighting -->
+    <link rel="stylesheet" href="lib/css/tomorrow.css">
+
+    <!-- If the query includes 'print-pdf', use the PDF print sheet -->
+    <script>
+      if (window.location.search.match( /print-pdf/gi))
+        document.write( '<link rel="stylesheet" href="css/print/pdf.css" type="text/css" media="all">' );
+      else
+        document.write( '<link rel="stylesheet" href="css/print/paper.css" type="text/css" media="print">' );;
+    </script>
+
+    <!--[if lt IE 9]>
+    <script src="lib/js/html5shiv.js"></script>
+    <![endif]-->
+  </head>
+
+  <body class="no-anims">
+
+    <div class="reveal">
+
+      <!-- Any section element inside of this container is displayed as a slide -->
+      <div class="slides">
+        <section id="intro">
+          <h1>JS Total</h1>
+          <h3 data-marker="intro-date">3ème partie, 16/12/2015</h3>
+          <h4 data-marker="intro-trainers">Jonathan Blanchet @ JS Attitude</h4>
+          <script>
+            // Delicously hacky. Look away.
+            if( navigator.userAgent.match( /(iPhone|iPad|iPod|Android)/i ) ) document.write( '<p style="color: rgba(0,0,0,0.3); text-shadow: none;">('+'Tap to navigate'+')</p>' );
+          </script>
+        </section>
+
+        <section id="overview">
+          <h1>JS Total</h1>
+          <h4 data-marker="overview-dates">3 journées du 14 au 16 décembre</h4>
+
+          <ol>
+            <li><span data-marker="day3">Aujourd’hui</span> : suite du développement de la SPA, Tests</li>
+          </ol>
+        </section>
+        <section>
+          <section id="spa-intro" class="chapter">
+            <h1>Notre p’tite SPA</h1>
+          </section>
+
+          <section id="spa-steps">
+            <h1>Étapes de dev</h1>
+
+            <ol>
+              <li>L’historique de check-ins</li>
+              <li>Garder la liste triée&nbsp;: l’ordre naturel</li>
+              <li>Détection online/offline, court-circuit et réconciliation</li>
+              <li>Stockage local</li>
+              <li>WebSockets et diffusion temps réel</li>
+              <li>Source final, bilan et Groc</li>
+            </ol>
+          </section>
+
+
+          <section id="spa-history-reset">
+            <h1>L’historique</h1>
+
+            <p>On décline une nouvelle vue imbriquée sur la droite, comme on l’avait fait pour la zone de check-in sur la gauche.</p>
+
+            <div class="fragment">
+              <p>Souci potentiel de <em>race condition asynchrone</em> :</p>
+
+              <img src="assets/spa-async-race.png" height="400">
+            </div>
+            <aside class="notes" data-markdown>
+              * création views/history_view.js. copié / collé depuis une autre vue comme home_view
+              * * require(view), exports et extend, template(history) et getRenderData
+              * éditer home_view en prenant modèle sur CheckInView (require + new HistoryView().render ) FIXME:list s'affiche. on peut fermer home_view
+              * correction du FIXME
+              * history_view : ajout de listTemplate:'templates/check_ins', le montrer
+              * édition de getRenderData, dont console de store.getCheckIns
+              * la vue de l'historique est la plus souvent vide. le console.log montre un tableau vide alors que require('lib/persistence').getCheckIns() montre qu'il y a bien des résultats
+              * demander comment résoudre. Proposer dans views/view.js setTimeout(this.afterRender.bind(this), 100); à la place du defer
+            </aside>
+          </section>
+
+          <section id="spa-history-race-fix">
+            <h1>La solution</h1>
+
+            <p>On va découpler tout ça proprement avec <a href="https://github.com/chalbert/Backbone-Mediator">Backbone.Mediator</a>.</p>
+
+            <p>On va ainsi utiliser des <em>événements applicatifs</em> pour notifier du <em>reset</em> de la collection.</p>
+
+            <p>Qui veut écoute… dont la fenêtre d’historique.  Si elle <em>render</em> avant la fin du <em>fetch</em>, elle pourra le refaire au bon moment.</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/persistence.js">
+collection.<u>on('reset'</u>, function() {
+  Backbone.Mediator.<u>publish('checkins:reset');</u>
+});
+            </code></pre>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="views/history_view.js">
+<u>subscriptions</u>: {
+  '<u>checkins:reset</u>': 'render'
+},
+            </code></pre>
+            <aside class="notes" data-markdown>
+              * explication du pattern pub/sub, et du Hub : pas d'instance = un singleton donc tout le monde publie là dedans
+              * persistence.js : collection on reset => mediator publish checkins:reset + require Backbone
+              * history_view : subscriptions (à copier / coller…) checkins:reset : render
+              * la colonne est rendue 2 fois mais est constamment à jour
+            </aside>
+          </section>
+
+          <section id="spa-history-add">
+            <h1>Réagir à l’ajout</h1>
+
+            <p>Quand on ajoute, ce serait bien de le voir tout de suite à droite !</p>
+
+            <p>Même approche : événement applicatif d‘ajout.</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/persistence.js">
+collection.<u>on('add'</u>, function(<u>model</u>) {
+  Backbone.Mediator.publish('<u>checkins:new</u>', <u>model.toJSON()</u>);
+});
+            </code></pre>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="views/history_view.js">
+subscriptions: {
+  '<u>checkins:new</u>': 'render',
+  // …
+},
+            </code></pre>
+            <aside class="notes" data-markdown>
+              * history_view : 'checkins:new':'render'
+              * persistence : collection on add, mediator public 'checkins:new'
+              * rappeler qu'ils peuvent supprimer l'historique à la main dans sources > localStorage + rm db.json
+            </aside>
+          </section>
+
+          <section id="spa-natural-order">
+            <h1>Ordre naturel</h1>
+
+            <p>La collection, par défaut, liste les modèles par ordre d’ajout.  Pas cohérent avec le tri serveur, qui a les plus récents d’abord.</p>
+
+            <p>Pour <strong>garantir</strong> l’ordre, il faut implémenter un <strong>ordre naturel</strong>, afin que la collection soit <strong>toujours</strong> bien ordonnée.</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="models/collection.js">
+<u>comparator</u>: function(<u>c1, c2</u>) {
+  return +c2.get('key') - +c1.get('key');
+}
+            </code></pre>
+
+            <p>Une fois ceci calé, on modifiera quand même notre réaction à <code>checkins:new</code> pour une UX plus remarquable.</p>
+            <aside class="notes" data-markdown>
+              * models/collection.js : ajout comparator
+              * faire remarquer que c'est correment trié mais ça va trop rapidement pour que l'utilisateur comprenne
+              * démo dans le navigateur de l'ajout de la classe new sur un li + montrer check_ins.jade et history.styl
+              * modifications pur UX dans history_view :
+              * * 'checkins:new':'render' devient insertCheckIn
+              * * création fonction insertCheckIn
+              * on peut fermer collection.js et history_view
+            </aside>
+          </section>
+
+          <section id="spa-offline">
+            <h1>Online/Offline</h1>
+
+            <p>HTML5 prévoit deux parties, hélas peu cohérentes :</p>
+            <p><code>navigator.onLine</code> (notez cette !@# de L majuscule)</p>
+            <p>Événements <code>online</code> et <code>offline</code> sur <code>window</code></p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/connectivity.js">
+if ('<u>onLine</u>' in navigator) {
+  exports.isOnline = function isOnline() { return navigator.onLine; };
+  $(<u>window</u>).on('<u>online offline</u>', checkStatus);
+  checkStatus();
+}
+
+function checkStatus() {
+  Backbone.Mediator.publish(exports.isOnline() ? 'connectivity:online' :
+    'connectivity:offline');
+}
+            </code></pre>
+
+            <p>On s’inscrit aux événements applicatifs pour refléter ça sur le picto d’en-tête (<code>HomeView</code>, <code>#onlineMarker</code>)</p>
+            <aside class="notes" data-markdown>
+              * ouvrir lib/connectivity.js
+              * on garde la ligne exports.isOnline en backup
+              * exports.isOnline = return navigator.onLine;
+              * test : require('lib/connectivity').isOnline() depuis la console, en fermant le wifi / cable. Devtools / emulation / offline n'aide pas ici…
+              * création checkStatus pour publier des events connectivity:online / connectivity:offline dans le bus
+              * synchro du picto online
+              * * dans home_view.js, fonction syncMarker (récupération de l'élément DOM, dont bootstrap tooltip, show/hide en fonction de isOnline ou pas) + require connectivity
+              * * exécuter syncMarker dans afterRender()
+              * * l'état est correct au premier rendu de la page
+              * * ajout des subscriptions (attention à toutes les typos possibles …), l'état se met à jour lorsqu'on coupe le wifi
+              * on peut fermer home_view, connectivity
+
+            </aside>
+          </section>
+
+          <section id="spa-short-circuit">
+            <h1>Court-circuits</h1>
+
+            <p>On est hors-ligne ? On évite de se tirer dans le pied :</p>
+            <p><strong>Inutile</strong> de recharger la géoloc / les POIs / de l’Ajax</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="models/check_in_ux.js">
+initialize: function() {
+  // …
+  checkFetchable();
+  // …
+  Backbone.Mediator.subscribe('connectivity:online', checkFetchable);
+  Backbone.Mediator.subscribe('connectivity:offline', checkFetchable);
+  // …
+  function checkFetchable() {
+    that.set('fetchPlacesForbidden', !cnxSvc.isOnline());
+  }
+}
+            </code></pre>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/persistence.js@syncPending  //  models/check_in.js@sync  //  …">
+if (!cnxSvc.isOnline()) {
+  return;
+}
+            </code></pre>
+            <aside class="notes" data-markdown>
+              Disable du bouton fetch lorsqu'on est offline
+
+              * dans check_in_view rappeler ce qu'on avait fait pour le bouton submit, copier / coller le bindings
+              * changer pour 'header button' => fetchPlacesForbidden
+              * dans check_in_ux : fonction checkFetchable, require connectivity
+              * subscribe aux events connectivity:online / offline
+              * tester en montrant qu'à la déco le bouton est disabled
+              * déclencher un fetch lorsqu'on revient online : dans check_in_view : rajouter subscriptions 'connectivity:online': 'fetchPlaces'
+              * on peut fermer check_in_view et check_in_ux
+
+
+              * mute des requêtes dans :
+              * * persistence.js syncPending
+              * * models/check_in.js : sync
+              * test offline : history doit être vide, un checkin n'envoie pas de XHR
+
+              Pourquoi on a encore des POIs qui apparaissent ? parceque dans lib/places.js on sauve tout dans localStorage. Si on vide localStorage, il reste les données fake :)
+            </aside>
+          </section>
+
+          <section id="spa-post-offline">
+            <h1>Réconciliation</h1>
+
+            <p>Une fois de retour <em>online</em>, il faut persister ce qui ne l’a pas été.</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/persistence.js (code compressé verticalement pour le slide)">
+function accountForSync(model) {
+  pendings = <u>_.without</u>(pendings, model);
+  if (pendings.length) return;
+
+  collection.off('sync', accountForSync);
+  collection.<u>fetch({ reset: true })</u>;
+}
+
+function syncPending() {
+  if (!cnxSvc.isOnline()) return;
+
+  collection.off('sync', accountForSync);
+  pendings = collection.filter(function(c) { return c.<u>isNew()</u>; });
+  if (pendings.length) {
+    collection.on('<u>sync</u>', accountForSync);
+    <u>_.invoke</u>(pendings, '<u>save</u>');
+  } else
+    collection.<u>fetch({ reset: true })</u>;
+}
+            </code></pre>
+            <aside class="notes" data-markdown>
+              démo du problème : un checkin offline n'est pas pris en compte au reload
+              * dans persistence.js
+              * * création fonction getPendingCheckIns (utilisation de filter + isNew) + export
+              * * édition fonction syncPending : .save sur tous les pending (+require underscore)
+              * * exécution syncPending quand connectivity:online
+              * * démo navigateur : la requête part lorsqu'on revient online
+              * cas tordus : comment savoir si la requête est réellement arrivée au serveur ?
+              * * écoute de l'event 'sync' de la collection dans syncPending
+              * * création de la fonction accountForSync
+              * * on dépile pendings, quand il n'y a plus rien à dépiler collection.off('sync') et on relance un fetch
+            </aside>
+          </section>
+
+          <section id="spa-lawnchair">
+            <h1>Offline First</h1>
+
+            <p>Cool, mais si on perd / rafraîchit la page avant de revenir <em>online</em> ?</p>
+            <p>Il nous faut un miroir local, persistant, de <code>collection</code>.</p>
+            <p><code>localStorage</code> adapté, mais API trop basique &rArr; <a href="http://brian.io/lawnchair/">Lawnchair</a>.  En plus, on pourrait migrer sur <a href="https://developer.mozilla.org/fr/docs/IndexedDB">IndexedDB</a> sans toucher au code.</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/persistence.js (code compressé verticalement pour ce slide)">
+var <u>localStore = new Lawnchair</u>({ <u>name: 'checkins'</u> }, function() {});
+
+// …
+
+collection.on('reset', function() {
+  <u>localStore.nuke</u>(function() { <u>localStore.batch</u>(collection.toJSON()); });
+  Backbone.Mediator.publish('checkins:reset');
+});
+
+collection.on('add', function(model) {
+  <u>localStore.save</u>(model.toJSON());
+  Backbone.Mediator.publish('checkins:new', model.toJSON());
+});
+            </code></pre>
+            <aside class="notes" data-markdown>
+              * montrer localStorage dans le navigateur
+              * limites des différentes méthodes de stockage : http://www.html5rocks.com/en/tutorials/offline/quota-research/?redirect_from_locale=fr#toc-overview
+              * lawnchair
+              * * facilitera le meilleur des mondes : switch de localStorage à IndexedDB / WebSQL facile si besoin de plus d'espace
+              * * full async, adapters, plugins
+              * * Lawnchair range par attribut 'key' (la date, chez nous)
+              * persistence.js :
+              * * require de lawnchair + lawnchair-dom + instanciation
+              * * à chaque ajout dans la collection => save : collection.on('add')
+              * * à chaque resynchro de toute la collection => nuke, puis sauvegarde de toute la collection
+              * montrer dans le navigateur le contenu de localStorage
+            </aside>
+          </section>
+
+          <section id="spa-lawnchair-load">
+            <h1>Relire le miroir</h1>
+
+            <p>Avant même de charger par Ajax, on restaure depuis le miroir.</p>
+            <p>Ça permet une UI initiale utile, et de résister au rechargement ou à la fermeture de la page pendant l’<em>offline</em>.</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/persistence.js">
+function initialLoad() {
+  <u>localStore.all</u>(function(checkins) {
+    collection.<u>reset</u>(checkins);
+    syncPending();
+  });
+}
+
+// …
+
+initialLoad(); // à la place de syncPending()
+            </code></pre>
+            <aside class="notes" data-markdown>
+              * persistence.js :
+              * * récupération depuis localStore des checkins, reset de la collection, avant exécution de syncPending
+              * * optionellemnt on peut le mettre dans une fonction initialLoad
+              * test 1 : passage offline, la collection s'affiche quand même
+              * test 2 : checkin pendant offline, passage online : le checkin est toujours présent. Re-reload : toujours là
+            </aside>
+
+          </section>
+
+          <section id="spa-lawnchair-dups">
+            <h1>Oops ! Doublons…</h1>
+
+            <p>Il reste un cas où la collection bouge et le miroir local ne le voit pas : les événements <code>sync</code> (ex. fourniture de l'ID par le serveur en réponse à la création).</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/persistence.js">
+collection.on('sync', function(model) {
+  if (!(model instanceof CheckIn)) {
+    return;
+  }
+
+  <u>localStore.save</u>(model.toJSON());
+});
+            </code></pre>
+            <aside class="notes" data-markdown>
+              * cas : un checkIn qui n'a pas été créé en local (la partie websocket arrive)
+              * écoute de collection.sync, check du type (car sync peut renvoyer la collection entière), sauvegarde en local
+              * CheckIn = require('models/check_in')
+              * test : couper le serveur, éditer db.json et rajouter à la main une entrée (changer id, key, placeId et usernName), rallumer : elle doit apparaître dans l'historique et dans localStorage
+            </aside>
+
+          </section>
+
+          <section id="spa-websockets">
+            <h1>Web Sockets</h1>
+
+            <p>D’autres gens check-in ? On aimerait le voir tout de suite…</p>
+            <p><a href="http://socket.io/">Socket.IO</a> fournit un magnifique enrobage, protocolaire et fonctionnel, au-dessus des Web Sockets et de leurs <em>fallbacks</em>.</p>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/notifications.js">
+var io = require('socket.io');
+var store = require('lib/persistence');
+// …
+var socket = <u>io.connect</u>();
+socket.<u>on('checkin', store.addCheckIn)</u>;
+            </code></pre>
+
+            <pre><code data-trim data-noescape class="javascript" data-file="lib/persistence.js">
+function addCheckIn(checkIn) {
+  <u>if (collection.findWhere(_.pick(checkIn, 'key', 'userName'))) {
+    return;
+  }</u>
+
+  checkIn.key = checkIn.key || Date.now();
+  collection[<u>'id' in checkIn ? 'add' : 'create'</u>](checkIn);
+}
+            </code></pre>
+            <aside class="notes" data-markdown>
+              * c'est quoi websocket
+              * * protocole habituel: vérification de qui vient, création de rooms, s'entendre sur le format des messages échangés, déconnexion et reconnexion auto, ping régulier
+              * socket.io
+              * * implémentation de tout ça
+              * * client / serveur, fallbacks
+              * * http://socket.io/docs/
+              * * dialogue via système d'événement client / serveur
+              * montrer jst-server.coffee : require, attachement au serveur et le emit
+              * edit notifications.js
+              * * require socket.io et lib/persistence
+              * * on 'checkin', store.addCheckIn
+              * edit lib/persistence
+              * * blindage de addCheckIn pour éviter les erreurs de PUT
+              * test avec navigation privée (ou mobile) en local
+              * test de tout le monde sur le serveur projeté
+            </aside>
+          </section>
+        </section>
+
+        <section id="testing">
+                  <section class="chapter">
+                    <h1>Tester</h1>
+                    <h4>Ce qui vaut pour le back, vaut pour le front</h4>
+
+                    <aside class="notes" data-markdown>
+                      Tranquilité du développeur, qualité finale du produit
+
+                      tests unitaires (fonction par fonction) VS tests d'intégration / fonctionnels (scénario complet)
+
+                      TDD :
+
+                      * bug = 1 test, la correction après
+                      * dev : lire la spec, écrire le test, passer les tests
+
+                      difficultés supposées : asynchronisme, navigateurs
+
+                      pas de souci technique : c'est culturel. Mais le Web a maintenant besoin de qualité
+
+                      Sinon, Jasmine, Mocha, Selenium, PhantomJS, casperJS
+                    </aside>
+                  </section>
+
+                  <section id="testing-mocha">
+                    <h1>Mocha</h1>
+
+                    <p>Universel, issu de Node, particulièrement fort pour tester les aspects <strong>asynchrones</strong></p>
+                    <p>Système d’assertions libre (délégué)</p>
+                    <p>Contextes imbriqués, before/after classiques</p>
+                    <p>Facilités de ciblage temporaire (inclusif/exclusif)</p>
+                    <p>Et plein d’autres trucs bien&nbsp;!</p>
+                    <p><a href="http://mochajs.org/">visionmedia.github.com/mocha</a></p>
+
+                    <aside class="notes" data-markdown>
+                      Dérouler l'ensemble de la page officielle.
+
+                      * assertion au choix (shoot.js, expect.js (jasmine), chai)
+                      * asynchrone : un callback avec .done() et il comprend
+                      * pendings tests
+                      * test duration : plus de 50 ms = warning de lenteur. plus de 100 = erreur
+                      * fait pour Node, mais peut aussi marcher dans browser
+                      * grosse liste de reporter (dont html, json, tap et surtout spec
+                      * à la base fait pour la ligne de commande en Node, mais on va le faire marcher dans un navigateur
+                    </aside>
+                  </section>
+
+                  <section id="mocha-ui">
+                    <h1>Mocha : BDD</h1>
+
+                    <pre><code data-trim data-noescape class="javascript" data-file="test/collection_spec.js">
+        <u>describe</u>('The collection', function() {
+          <u>before</u>(function() { … });     // Avant l'ensemble du `describe`
+
+          <u>beforeEach</u>(function() { … }); // Avant chaque `it`
+
+          // Et aussi : `after`, `afterEach`
+
+          <u>it</u>('should maintain the natural order', function() {
+            // Setup du test et assertions ici
+          });
+        });
+                    </code></pre>
+
+                    <pre><code data-trim data-noescape class="no-highlight">
+        <span class="prompt">$ mocha test/collection_spec.js</span>
+
+          The collection
+            <span class="green">✓</span> <span class="gray">should maintain the natural order</span>
+
+          <span class="green">1 passing</span> <span class="gray">(27ms)</span>
+                    </code></pre>
+                    <aside class="notes" data-markdown>
+                      * montrer package.json
+                      * * dans devDependancies les packages de test
+                      * * le npm run testing (marche sur win ?)
+                      * créer le rep test/ (RACINE)
+                      * créer test/collection_spec.js
+                      * copier / coller depuis la slide
+                      * mettre use strict, config jsHint : globals describe,before …
+                      * before : init de chai.should()
+                      * rappeler qu'on veut tester l'ordre naturel de la collection : montrer models/collection.js et son comparator
+                      * montrer <code>npm test</code> d'abord puis <code>npm run testing</code>
+                      * beforeEach : require models/collection + instance coll en variable de la portée d'au dessus
+                      * faire trouver l'algo du test
+                      * après que le test passe, bien tester que le test fail en commentant comparator dans models/collection
+
+                      * démos de pending : it('attend une implémentation');
+                      * démo asynchrone + vitesse d'exécution moyenne, rapide, lente, timeout
+        <pre>it('doit aller vite', function (done) {
+          // timeout de ce test
+          this.timeout(1000);
+          // appel de done pour dire ok c'est fini
+          setTimeout(done, 50); // 20 = rapide, 50 = moyen, 80 = lent
+        });</pre>
+
+                      * Couverture de test : démo possible avec un `npm run test-cov`
+                      * * montrer <code>test-reports/coverage.json</code> et reports/lcov-report.index.html
+                      * * provient de Istanbul, on peut montrer package.json => scripts => test-cov
+                    </aside>
+                  </section>
+
+                  <section id="chai">
+                    <h1><a href="http://chaijs.com/">Chai</a></h1>
+
+                    <p>Assertions riches (+ tonnes de plugins) &amp; choix de style</p>
+
+                    <table class="table lines rightLabels">
+                      <thead>
+                        <tr>
+                          <th><a href="http://chaijs.com/guide/styles/">Syntaxe</a></th>
+                          <th>Exemples</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>Assert</td>
+                          <td>
+                            <pre><code data-trim data-noescape class="javascript">
+        assert.typeOf(foo, 'string', 'foo is a string');
+        assert.equal(foo, 'bar', 'foo equal `bar`');
+        assert.lengthOf(foo, 3, 'foo`s value has a length of 3');
+        assert.lengthOf(beverages.tea, 3, 'beverages has 3 types of tea');
+                            </code></pre>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Expect</td>
+                          <td>
+                            <pre><code data-trim data-noescape class="javascript">
+        expect(foo).to.be.a('string');
+        expect(foo).to.equal('bar');
+        expect(foo).to.have.length(3);
+        expect(beverages).to.have.property('tea').with.length(3);
+                            </code></pre>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td><strong>Should</strong></td>
+                          <td>
+                            <pre><code data-trim data-noescape class="javascript">
+        foo.should.be.a('string');
+        foo.should.equal('bar');
+        foo.should.have.length(3);
+        beverages.should.have.property('tea').with.length(3);
+                            </code></pre>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </section>
+
+                  <section id="testing-sinon">
+                    <h1>sinon.js</h1>
+                    <h4>De qui se moque-t-on&nbsp;?</h4>
+
+                    <p><strong>Attention&nbsp;: tuerie</strong></p>
+                    <p>Outil de spies/mocks/stubs hyper bien foutu</p>
+                    <p>Mocke carrément Ajax, les APIs REST et le temps&nbsp;!</p>
+                    <p>Indispensable pour découpler le code testé de ses dépendances externes, ce qui est une bonne pratique incontournable en unitaire/fonctionnel.</p>
+                    <p><a href="http://sinonjs.org/">sinonjs.org</a></p>
+
+                    <aside class="notes" data-markdown>
+                      Recommandé pour toute situation de mocking, quel que soit le contexte/harnais.  Éviter notamment la fonctionnalité similaire intégrée à Jasmine, qui est carrément pourrie (clock pas configurable par ex…, stub et spy).
+
+                      Bien montrer, au travers de la page officielle, la hiérarchie spy -> stub -> mock
+
+                      * spy : log tous les appels à une fonction (this, arguments, return, timestamps…). Ne touche pas à la fonctionnalité
+                      * stub : remplace la méthode d'origine. Genre $.ajax
+                      * Mock : composé de stubs, pour simuler une API complète
+                      * fake timers : pour tester animations, timeouts, horloges… Remplace setTimeout, setInterval, clear, Date …
+                      * fake XHR mais encore mieux le fake server* pour définir comment un serveur XHR doit répondre
+
+                    </aside>
+                  </section>
+
+                  <section id="sinon-timers">
+                    <h1>Maître du temps</h1>
+                    <p>Sinon permet de prendre la main sur toute la gestion du temps*</p>
+
+                    <pre><code data-trim data-noescape class="javascript" data-file="test/persistence_spec.js">
+        var clock = sinon.<u>useFakeTimers</u>(); // Gel du temps
+        // …
+        clock.<u>tick(1)</u>;
+        // …
+        clock.<u>restore</u>();
+                    </code></pre>
+
+                    <pre><code data-trim data-noescape class="javascript" data-file="test-phantomjs/home_view_spec.js">
+        clock = sinon.useFakeTimers(<u>1412507461204</u>); // Reset à un moment donné + gel
+        // …
+        clock.tick(1000);
+        // …
+        clock.restore();
+                    </code></pre>
+
+                    <footer>*
+                      <code>new Date</code>, <code>Date.now()</code>,
+                      <code>setTimeout</code>, <code>clearTimeout</code>,
+                      <code>setInterval</code>, <code>clearInterval</code>,
+                      <code>setImmediate</code>, <code>clearImmediate</code>
+                    </footer>
+
+                    <aside class="notes" data-markdown>
+                      But 1 : vérifier que nos clés sont bien uniques (à la milliseconde près en tout cas)
+
+                      * remontrer qu'on avait créé lib/persistence.js/@addCheckIn . Ainsi que getCheckIns
+                      * créer persistence\\_spec.js , copier depuis collection\\_spec . On peut supprimer beforeEach, on ne garde qu'un seul it()
+                      * algo : **ajouter 2 checkins à 1 milliseconde d'intervalle et vérifier que les keys sont séparées d'une milliseconde**
+                      * récupérer lib/persistence, faire un addCheckIn
+                      * faire un getCheckIns, tester la taille de la collection et que la propriété key est apparue
+                      * lancer ‘npm run test‘ : ça plante sur ‘Cannot read property 'ajax' of undefined‘ . On va simuler tout jQuery avec cheerio + rajouter Backbone Mediator
+                      * avancer l'horloge d'une milliseconde
+                      * faire un second addCheckIn, puis getCheckIns, test de la taille de la collection
+                      * tester que le dernier checkIn ajouté (index 0) a sa key === la première key + 1
+                      * ATTENTION BUG sinon et node: si après des consoles de Date.now la date n'avance pas, utiliser +new Date à la place
+                      * tester que ça fail en remplaçant par exemple dans persistence/@addCheckIn Date.now() par un _.random(0, 10000) (ce qui évite que Kevin le stagiaire change cette ligne)
+
+
+                      But 2 : Test d'interface : l'horloge qui se me à jour toute seule
+
+                      * exécuter test-phantomjs/home_view_spec.html
+                      * créer test-phantomjs/home_view_spec.js depuis collection_spec.js
+                      * enlever require(chai) et chai.should() (déjà dans le html), et laisser 2 it()
+                      * annonce qu'on veut rendre la vue home_view : @beforeEach require views/home_view et new HomeView.render()
+                      * regarder les erreurs, implémenter le code du @before
+                      * implémenter à la suite + le .restore dans afterEach :
+                      * * stub de prompt (regarder sessionStorage)
+                      * * stub de socket.io,
+                      * * fakeServer.create()
+                      * * clock useFakeTimer
+                      * récupérer l'heure : Date.now() => 1421965831064 puis dans la console require('moment')(1421965831064).format('dddd D MMMM YYYY HH:mm:ss')
+                      * au passage ouvrir le débat : est ce que je hardcode le jour ou est ce que j'utilise moment ? test = certitude, on hardcode
+                      * test 1 (statique)
+                      * test 2 (dynamique, avec le tick)
+
+                      montrer que le navigateur c'est cool mais qu'on peut aussi en avoir un en CLI : mocha-phantomjs test-phantomjs/home_view_spec.html
+                    </aside>
+                  </section>
+
+                  <section id="sinon-server">
+                    <h1>Pas besoin du serveur</h1>
+
+                    <p>Tester le client en isolation, sans serveur !</p>
+                    <p>Au top pour tester les cas d’erreur et isoler du serveur effectif.</p>
+
+                    <pre><code data-trim data-noescape class="javascript" data-file="test-phantomjs/persistence_spec.js">
+        xhr = sinon.<u>fakeServer.create</u>();
+
+        // …
+
+        var req = _(xhr.<u>requests</u>).findWhere({ method: 'POST' });
+        req.<u>respond</u>(201, { 'Content-Type': 'application/json' }, '{"id":42}');
+
+        // …
+
+        xhr.<u>restore</u>();
+                    </code></pre>
+                    <aside class="notes" data-markdown>
+                      but : tester le merge des données revenant du serveur avec le cache local
+
+                      * créer test-phantomjs/persistence_spec.html en copiant/collant home_view_spec.html . Seule modification : inclusion de persistence_spec.js
+                      * création de persistence_spec.js en copiant / collant test/persistence_spec.js.
+                      * Supprimer require(chai) et require(sinon)
+                      * supprimer le fake Backbone.$.ajax
+                      * remplacer cheerio par jquery
+                      * ajouter require de underscore
+                      * supprimer le contenu du it() et du beforeEach(), changer le texte
+                      * dans la console chrome, voir les erreurs de XHR cross origine
+                      * dans beforeEach sinon.fakeServer.create , store = require(lib/persistence), localStorage.clear()
+                      * afterEach : xhr.restore()
+                      * test :
+                      * * ajout à la collection (store.addCheckIn)
+                      * * on vérifie que la requête à notre serveur virtuel est in-flight : check si la liste des pendings === 1
+                      * * cohérence des données dans les pending et les requêtes in-flight (xhr.requests)
+                      * * fake réponse avec code 201 et id 42
+                      * * on vérifie que les pendings sont revenus à 0
+
+                    </aside>
+                  </section>
+
+                  <section id="testing-automation">
+                    <h1>Automatiser les navigateurs</h1>
+
+                    <p><a href="http://seleniumhq.org/">Selenium</a></p>
+                    <p><a href="http://karma-runner.github.io/">Karma</a></p>
+                    <p><a href="http://phantomjs.org/">PhantomJS</a> et <a href="http://slimerjs.org/">SlimerJS</a></p>
+                    <p><a href="http://casperjs.org/">CasperJS</a>, <a href="https://github.com/jonleighton/poltergeist">Poltergeist</a>…</p>
+                    <p>(et le harnais/serveur <a href="https://github.com/creativelive/spook">Spook</a>)</p>
+
+                    <aside class="notes" data-markdown>
+                      Selenium :
+
+                      * 20 ans, par Saucelabs
+                      * TOUS les navigateurs
+                      * simule TOUT : prompt, upload, screenshot, saisie progressive de texte, réglages utilisateur …
+                      * langage de script propre
+                      * mais Selenium RC = connecteurs pour le piloter
+                      * un paquet de VMs
+
+                      Karma :
+                      * ex testacular
+                      * concurrent direct Selenium
+                      * moins de features
+                      * pas IE !
+
+                      Phantom / Slimer :
+                      * webkit (équivalent chrome 22 + V8) ou gecko
+                      * solide, rapide
+                      * screenshot, navigation, exécution de JS dans la page
+                      * manque certaines actions comme drag/drop
+                      *
+
+
+                      TrifleJS :
+
+                      * IE headless (en pratique v8 + WebComponent de la CLR, mais plutôt bien équivalent, au final).
+                      * IE récent donc, un jour
+
+                      CasperJS :
+
+                      * pilote Phantom, slimer et trifle
+                      * API bcp + lisible
+                      * pilotable depuis NodeJS avec SpookyJS
+
+                      Casper 2
+                      * sera un vrai module Node
+                      * API async en promise
+
+                      Poltergeist en Ruby
+
+                      Faire une démo de CasperJS basée sur 3 exemples :
+                      [Google Links](https://github.com/n1k0/casperjs/blob/master/samples/googlelinks.js),
+                      [Screenshot](https://github.com/n1k0/casperjs/blob/master/samples/screenshot.js) (changer le sélecteur à `.js-stream-item`, si ça bloque) et
+                      [Google Suggest](https://gist.github.com/n1k0/5477539) (s'il remarche…)
+
+                      Indiquer que la combo Mocha + CasperJS, qui nécessite encore un peu de tripatouillages mais sera bientôt fluidifiée, constitue une solution de référence ces temps-ci pour des tests d'inté *headless* donc en CI…
+                    </aside>
+                  </section>
+
+                  <section id="mocha-phantomjs">
+                    <h1>Mocha-PhantomJS</h1>
+                    <p>Bridge prédéfini permettant d’exécuter mocha aussi bien dans un navigateur, interactivement, que dans un PhantomJS</p>
+
+                    <pre><code data-trim data-noescape class="javascript" data-file="test-phantomjs/persistence_spec.html">
+        &lt;div id="mocha"&gt;&lt;/div&gt;
+        <u>&lt;script src="../node_modules/mocha/mocha.js"&gt;&lt;/script&gt;</u>
+        &lt;script&gt;<u>mocha.ui('bdd').reporter('html').slow(250);</u>&lt;/script&gt;
+        &lt;script src="../public/app.js"&gt;&lt;/script&gt;
+        &lt;script src="./persistence_spec.js"&gt;&lt;/script&gt;
+        &lt;script&gt;
+        <u>if (window.mochaPhantomJS) { mochaPhantomJS.run(); }
+        else { mocha.run(); }</u>
+        &lt;/script&gt;
+                    </code></pre>
+
+                    <pre><code data-trim data-noescape class="no-highlight">
+        <span class="prompt">$ mocha-phantomjs test-phantomjs/persistence_spec.html</span>
+
+          The persistence layer
+            <span class="green">✓</span> <span class="gray">should properly merge sync-based data in the local cache</span>
+
+          <span class="green">1 passing</span> <span class="gray">(31ms)</span>
+                    </code></pre>
+                    <aside class="notes" data-markdown>
+                      BUG : ça ne marche pas
+                      mocha-phantomjs persistence_spec.html
+                    </aside>
+                  </section>
+
+                  <section id="testing-paas">
+                    <h1>Les VM en PaaS</h1>
+
+                    <p><a href="http://www.browserstack.com/">Browserstack</a> (et <a href="http://modern.ie">modern.ie</a>)</p>
+                    <p><a href="https://saucelabs.com/">SauceLabs</a>*</p>
+
+                    <footer>* À la main avec
+                      <a href="https://saucelabs.com/javascript/">JS Unit Testing on Sauce</a>,
+                      <a href="https://saucelabs.com/javascript/mocha-js">Mocha JS on Sauce</a>,
+                      <a href="https://docs.saucelabs.com/tutorials/node-js/">Node.js on Sauce</a>,
+                      <a href="https://docs.saucelabs.com/reference/rest-api/">l’API REST</a>,
+                      ou (en théorie…)
+                      <a href="https://github.com/pbakaus/mocha-sauce">mocha-sauce</a>.
+                      Mais aussi via Karma avec
+                      <a href="https://github.com/karma-runner/karma-sauce-launcher">karma-sauce-launcher</a>, ou via <a href="http://theintern.io/">Intern</a>…
+                    </footer>
+
+                    <aside class="notes" data-markdown>
+                      Pour avoir rapidement des versions très spécifiques :
+
+                      * SauceLabs et BrowserStack
+                      * SauceLabs au niveau scripting a l'air plus robuste. forfait unique pour les usages manuel et auto, enregistrement vidéo de l'auto
+                      * BrowserStack : 30 mn grauites pour de l'interactif
+                      * mobiles dans simulateur
+                      * Saucelabs : pilotable via tout langage
+
+                    </aside>
+                  </section>
+                </section>
+                <section id="conclusion">
+          <section class="chapter">
+            <h1>Conclusion</h1>
+            <h4>Les meilleures choses ont une fin</h4>
+          </section>
+
+          <section id="conclusion-wrapup">
+            <h1>En résumé…</h1>
+
+            <p>Web front == <strong>power</strong></p>
+            <p>Écosystème de plus en plus riche</p>
+            <p>Essor des applis riches côté client</p>
+            <p>Ça va vite se passer surtout sur mobile</p>
+            <p>JS == langage n°1</p>
+            <p>Y’a quand même de quoi s’éclater…</p>
+          </section>
+
+          <section id="thank-you">
+            <h1>Merci&nbsp;!</h1>
+
+            <p><a href="http://www.js-attitude.fr/">http://www.js-attitude.fr/</a></p>
+            <p><a href="http://twitter.com/jsattitude">@jsattitude</a></p>
+          </section>
+        </section>
+      </div>
+    </div>
+
+    <script src="lib/js/head.min.js"></script>
+    <script src="js/reveal.min.js"></script>
+
+    <script>
+      // Full list of configuration options available here:
+      // https://github.com/hakimel/reveal.js#configuration
+      Reveal.initialize({
+        controls: true,
+        progress: true,
+        history: true,
+        center: true,
+
+        theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+        transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+
+        // Parallax scrolling
+        // parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+        // parallaxBackgroundSize: '2100px 900px',
+
+        // Optional libraries used to extend on reveal.js
+        dependencies: [
+          { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+          { src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+          { src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+          { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+          { src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+        ]
+      });
+    </script>
+  </body>
+</html>
